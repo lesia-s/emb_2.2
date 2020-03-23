@@ -6,4 +6,4 @@
 Усі коди об'єднані в єдиний файл Main.java
 
 Графіки
-![Plot](https://github.com/lesia-s/emb_2.2/plot.png)
+![Plot](https://github.com/lesia-s/emb_2.2/blob/master/plot.png)
