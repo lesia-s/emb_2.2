@@ -1,23 +1,26 @@
+package additional;
+
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
-        JFrame frame = new JFrame("Lab4");
+        JFrame frame = new JFrame("Additional task");
         frame.setLayout(new FlowLayout());
 
-        Signal signal = new Signal(64, 10, 120);
+        Signal signal = new Signal(5, 12, 10, 120);
+        signal.countDependencies();
 
-        new Chart(frame, "x(t)", signal.getArr(), "Mx = " + signal.getMx() + "\n" + "Dx = " + signal.getDx());
-        new Chart(frame, "", signal.getfArr(), "");
+        new Chart(frame, "FFT", "DFT", signal.getFFT(), signal.getDFT(), "");
 
         frame.pack();
         frame.setVisible(true);
@@ -25,13 +28,34 @@ public class Main {
 }
 
 class Signal {
-    private final double[] xArr;
-    private final double Mx;
-    private final double Dx;
+    private final int n;
+    private final int freq;
+    private final int fromN;
+    private final int toN;
+    private HashMap<Integer, Long> FFT;
+    private HashMap<Integer, Long> DFT;
 
-    public Signal(int N, int n, int freq) {
+    public Signal(int fromN, int toN, int n, int freq) {
+        this.n = n;
+        this.freq = freq;
+        this.fromN = fromN;
+        this.toN = toN;
+    }
 
-        this.xArr = new double[N];
+    public void countDependencies() {
+        FFT = new HashMap<>();
+        DFT = new HashMap<>();
+        for (int i = this.fromN; i <= this.toN; i++) {
+            int N = (int) Math.pow(2, i);
+            double[] xArr = generateSignal(N, this.n, this.freq);
+            FFT.put(N, countFFT(xArr));
+            DFT.put(N, countDFT(xArr));
+        }
+    }
+
+    public double[] generateSignal(int N, int n, int freq) {
+
+        double[] xArr = new double[N];
 
         for (int i = 0; i < N; i++) {
             double x = 0;
@@ -41,25 +65,14 @@ class Signal {
             for (int b = 0, c = freq; b < n; b++, c += freq) {
                 x += A * Math.sin(c * i + fi);
             }
-            this.xArr[i] = x;
+            xArr[i] = x;
         }
 
-        double mSum = 0;
-        for (int i = 0; i < N; i++) {
-            mSum += xArr[i];
-        }
-
-        this.Mx = mSum/N;
-
-        double dSum = 0;
-        for (int i = 0; i < N; i++) {
-            dSum += Math.pow((xArr[i] - Mx), 2);
-        }
-
-        this.Dx = dSum/(N-1);
+        return xArr;
     }
 
-    public double[] getfArr() {
+    public long countFFT(double[] xArr) {
+        long start = System.currentTimeMillis();
         int N = xArr.length;
         double[] fArr = new double[N - 1];
         for (int p = 0; p < N - 1; p++) {
@@ -74,39 +87,73 @@ class Signal {
             }
             fArr[p] = Math.sqrt(Math.pow(r1 + r2, 2) + Math.pow(i1 + i2, 2));
         }
-        return fArr;
+        return System.currentTimeMillis() - start;
     }
 
-    public double[] getArr(){
-        return xArr;
+    public long countDFT(double[] xArr) {
+        long start = System.currentTimeMillis();
+        int N = xArr.length;
+        double[][] fCos = new double[N-1][N-1];
+        double[][] fSin = new double[N-1][N-1];
+        for (int p = 0; p < N-1; p++) {
+            for (int k = 0; k < N - 1; k++) {
+                fCos[p][k] += Math.cos(2 * Math.PI / N * p * k);
+                fSin[p][k] += Math.sin(2 * Math.PI / N * p * k);
+            }
+        }
+        double[] re = new double[N - 1];
+        double[] im = new double[N - 1];
+        double[] fArr = new double[N - 1];
+        for (int p = 0; p < N-1; p++) {
+            double l = 0;
+            double h = 0;
+            for (int k = 0; k < N-1; k++) {
+                l += xArr[k]*fCos[p][k];
+                h += xArr[k]*fSin[p][k];
+            }
+            re[p] = l;
+            im[p] = h;
+        }
+        for (int p = 0; p < N-1; p++) {
+            fArr[p] = Math.sqrt(Math.pow(re[p], 2) + Math.pow(im[p], 2));
+        }
+        return System.currentTimeMillis() - start;
     }
 
-    public double getDx(){
-        return this.Dx;
+    public HashMap<Integer, Long> getDFT() {
+        return this.DFT;
     }
 
-    public double getMx(){
-        return this.Mx;
+    public HashMap<Integer, Long> getFFT() {
+        return this.FFT;
     }
 }
 
 class Chart {
-    public Chart(JFrame frame, String name, double[] arr, String title) {
+    public Chart(JFrame frame, String nameFFT, String nameDFT, HashMap<Integer, Long> fft, HashMap<Integer, Long> dft, String title) {
 
-        XYSeries series = new XYSeries(name);
+        XYSeries seriesFFT = new XYSeries(nameFFT);
+        XYSeries seriesDFT = new XYSeries(nameDFT);
 
-        for(int i = 0; i < arr.length; i++){
-            series.add(i, arr[i]);
+        for (Map.Entry<Integer, Long> pair : fft.entrySet()) {
+            seriesFFT.add(pair.getKey(), pair.getValue());
         }
 
-        XYDataset xyDataset = new XYSeriesCollection(series);
+        for (Map.Entry<Integer, Long> pair : dft.entrySet()) {
+            seriesDFT.add(pair.getKey(), pair.getValue());
+        }
+
+        XYSeriesCollection xyDataset = new XYSeriesCollection();
+        xyDataset.addSeries(seriesDFT);
+        xyDataset.addSeries(seriesFFT);
+
         JFreeChart chart = ChartFactory
-                .createXYLineChart(title, "", "",
+                .createXYLineChart(title, "N", "ms",
                         xyDataset,
                         PlotOrientation.VERTICAL,
                         true, true, true);
         ChartPanel chartPanel = new ChartPanel(chart);
-        chartPanel.setPreferredSize(new Dimension(400, 270));
+        chartPanel.setPreferredSize(new java.awt.Dimension(800, 540));
 
         frame.getContentPane()
                 .add(chartPanel);
